@@ -2608,7 +2608,6 @@ sensenova_si_series = {
 
 jingyu_si_series = {
     "Jingyu": partial(vlm.Jingyu, model_path="hohem/Jingyu_20260718"),
-    "Jingyu-vLLM": partial(vlm.Jingyu, model_path="hohem/Jingyu_20260718", use_vllm=True),
 }
 
 internvl_groups = [
