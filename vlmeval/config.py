@@ -2319,9 +2319,9 @@ oryx_series = {
     'oryx': partial(vlm.Oryx, model_path="THUdyh/Oryx-1.5-7B"),
 }
 
-# recommend: vllm serve moonshotai/Kimi-VL-A3B-Thinking-2506 
+# recommend: vllm serve moonshotai/Kimi-VL-A3B-Thinking-2506
 # --served-model-name api-kimi-vl-thinking-2506 --trust-remote-code
-# --tensor-parallel-size 2 --max-num-batched-tokens 131072 
+# --tensor-parallel-size 2 --max-num-batched-tokens 131072
 # --max-model-len 131072 --limit-mm-per-prompt image=256
 kimi_vllm_series = {
     "api-kimi-vl-thinking-2506": partial(
@@ -2606,6 +2606,11 @@ sensenova_si_series = {
     ),
 }
 
+jingyu_si_series = {
+    "Jingyu": partial(vlm.Jingyu, model_path="hohem/Jingyu_20260718"),
+    "Jingyu-vLLM": partial(vlm.Jingyu, model_path="hohem/Jingyu_20260718", use_vllm=True),
+}
+
 internvl_groups = [
     internvl, internvl2, internvl2_5, mini_internvl, internvl2_5_mpo, 
     internvl3, internvl3_5
@@ -2620,24 +2625,86 @@ interns1_groups = [
 interns1_series = {}
 for group in interns1_groups:
     interns1_series.update(group)
-    
+
 supported_VLM = {}
 
 model_groups = [
-    ungrouped, o1_apis, api_models, xtuner_series, qwen_series, llava_series, granite_vision_series,
-    internvl_series, yivl_series, xcomposer_series, minigpt4_series, 
-    idefics_series, instructblip_series, deepseekvl_series, deepseekvl2_series, deepseekocr_series,
-    janus_series, minicpm_series, cogvlm_series, wemm_series, cambrian_series, 
-    chameleon_series, video_models, ovis_series, vila_series, mantis_series,
-    mmalaya_series, phi3_series, phi4_series, xgen_mm_series, qwen2vl_series, qwen3vl_series, qwen3_5_series,
-    slime_series, eagle_series, moondream_series, llama_series, molmo_series,
-    kosmos_series, points_series, nvlm_series, vintern_series, h2ovl_series,
-    aria_series, smolvlm_series, sail_series, valley_series, vita_series,
-    ross_series, emu_series, ola_series, ursa_series, gemma_series,
-    long_vita_series, ristretto_series, kimi_series, aguvis_series, hawkvl_series,
-    flash_vl, kimi_vllm_series, oryx_series, treevgr_series, varco_vision_series, qtunevl_series, 
-    xvl_series, thyme_series, logics_series, cosmos_series, keye_series, qianfanvl_series, 
-    lfm2vl_series, rbdashmm_api_series_lmdeploy, interns1_series, insight_v_series, covt_series
+    ungrouped,
+    o1_apis,
+    api_models,
+    xtuner_series,
+    qwen_series,
+    llava_series,
+    granite_vision_series,
+    internvl_series,
+    yivl_series,
+    xcomposer_series,
+    minigpt4_series,
+    idefics_series,
+    instructblip_series,
+    deepseekvl_series,
+    deepseekvl2_series,
+    deepseekocr_series,
+    janus_series,
+    minicpm_series,
+    cogvlm_series,
+    wemm_series,
+    cambrian_series,
+    chameleon_series,
+    video_models,
+    ovis_series,
+    vila_series,
+    mantis_series,
+    mmalaya_series,
+    phi3_series,
+    phi4_series,
+    xgen_mm_series,
+    qwen2vl_series,
+    qwen3vl_series,
+    qwen3_5_series,
+    slime_series,
+    eagle_series,
+    moondream_series,
+    llama_series,
+    molmo_series,
+    kosmos_series,
+    points_series,
+    nvlm_series,
+    vintern_series,
+    h2ovl_series,
+    aria_series,
+    smolvlm_series,
+    sail_series,
+    valley_series,
+    vita_series,
+    ross_series,
+    emu_series,
+    ola_series,
+    ursa_series,
+    gemma_series,
+    long_vita_series,
+    ristretto_series,
+    kimi_series,
+    aguvis_series,
+    hawkvl_series,
+    flash_vl,
+    kimi_vllm_series,
+    oryx_series,
+    treevgr_series,
+    varco_vision_series,
+    qtunevl_series,
+    xvl_series,
+    thyme_series,
+    logics_series,
+    cosmos_series,
+    keye_series,
+    qianfanvl_series,
+    lfm2vl_series,
+    rbdashmm_api_series_lmdeploy,
+    interns1_series,
+    insight_v_series,
+    covt_series,
+    jingyu_si_series,
 ]
 
 # add by EASI team

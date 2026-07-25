@@ -31,6 +31,7 @@ from .instructblip import InstructBLIP
 from .interns1 import InternS1Chat
 from .internvl import InternVLChat
 from .janus import Janus
+from .jingyu import Jingyu
 from .keye_vlm import KeyeChat
 from .kimi_vl import KimiVL
 from .kosmos import Kosmos2
