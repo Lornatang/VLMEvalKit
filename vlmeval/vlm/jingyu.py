@@ -36,11 +36,11 @@ class Jingyu(BaseModel):
         self,
         model_path: str,
         use_vllm: bool = False,
-        max_new_tokens: int = 1024,
-        temperature: float = 0.0,
+        max_new_tokens: int = 4096,
+        temperature: float = 0.1,
         top_p: float = 0.95,
         top_k: int = 20,
-        repetition_penalty: float = 1.0,
+        repetition_penalty: float = 1.1,
         system_prompt: Optional[str] = None,
         verbose: bool = False,
         **kwargs: Any,
@@ -50,11 +50,11 @@ class Jingyu(BaseModel):
         Args:
             model_path (str): Path or HF id of an exported Jingyu checkpoint.
             use_vllm (bool): If True, use vLLM; otherwise HuggingFace. Defaults to False.
-            max_new_tokens (int): Max tokens to generate. Defaults to 1024.
-            temperature (float): Sampling temperature; <=0 disables sampling. Defaults to 0.0.
+            max_new_tokens (int): Max tokens to generate. Defaults to 4096.
+            temperature (float): Sampling temperature; <=0 disables sampling. Defaults to 0.1.
             top_p (float): Nucleus sampling threshold. Defaults to 0.95.
             top_k (int): Top-k sampling threshold. Defaults to 20.
-            repetition_penalty (float): Repetition penalty. Defaults to 1.0.
+            repetition_penalty (float): Repetition penalty. Defaults to 1.1.
             system_prompt (Optional[str]): Optional system prompt. Defaults to None.
             verbose (bool): Whether to print prompts/responses. Defaults to False.
             **kwargs (Any): Extra options such as `limit_mm_per_prompt`, `device_map`,
