@@ -1,20 +1,22 @@
 import json
-import os
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Union
 
 import pandas as pd
-from openai import OpenAI
 from tqdm import tqdm
 
 from vlmeval.dataset.image_base import ImageBaseDataset
+from vlmeval.dataset.utils import build_judge
 from vlmeval.dataset.utils.judge_cache import (dump_judge_cache, get_judge_cache_file,
                                                get_judge_detail_file, get_judge_score_file,
                                                load_judge_cache)
-from vlmeval.dataset.utils.simplevqa import SimpleVQAEval
-from vlmeval.smp import file, misc
+from vlmeval.dataset.utils.simplevqa import SimpleVQAEval, normalize_verdict
+from vlmeval.smp import file, get_logger, misc
 
 NUM_WORKERS = 16
+CACHE_DUMP_INTERVAL = 20
+logger = get_logger(__name__)
 
 COMPARE_ANSWER_PROMPT = """
             请根据给定问题、标准答案和模型预测的答案来评估模型的回答是否正确。您的任务是将结果评定为：【正确】、【错误】或【未尝试】。
@@ -62,7 +64,7 @@ COMPARE_ANSWER_PROMPT = """
             这些答复均为【未尝试】，因为：
             - 没有包含标准答案中的重要信息。
             - 回复中没有与标准答案矛盾的陈述。
-            只返回字母”A”、”B”或”C”，无须添加其他文本。
+            如果需要用字母作答，请使用 A/B/C 分别表示【正确】/【错误】/【未尝试】；最终 JSON 中的结论仍须使用中文。
 
             另外注意以下几点：
             - 对于标准答案为数字的问题，预测答案应和标准答案一致。例如，考虑问题“金山铁路黄浦江特大桥的全长是多少米？”，标准答案为“3518.17”：
@@ -97,19 +99,57 @@ COMPARE_ANSWER_PROMPT = """
 
 
 def simplevqa_judge_failed(result):
+    """Return True when a cached judge result holds no usable verdict."""
     if not isinstance(result, dict):
         return True
     judge_results = result.get('judge_res')
-    if not isinstance(judge_results, dict):
+    if not isinstance(judge_results, dict) or not judge_results:
         return True
+
     judge_res = judge_results.get('model_response')
     if isinstance(judge_res, dict):
         judge_res = judge_res.get('conclusion')
-    return (
-        not isinstance(judge_res, str)
-        or not judge_res.strip()
-        or '答案解析失败' in judge_res
-    )
+    return normalize_verdict(judge_res) is None
+
+
+def _extract_json_object(text):
+    """Best-effort extraction of a JSON object from a judge response."""
+    if not isinstance(text, str):
+        return None
+    text = text.strip()
+    text = re.sub(r'^```(?:json|python)?', '', text, flags=re.IGNORECASE).strip()
+    text = re.sub(r'```$', '', text).strip()
+    start, end = text.find('{'), text.rfind('}')
+    if start == -1 or end <= start:
+        return None
+    try:
+        parsed = json.loads(text[start:end + 1])
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _extract_verdict(text):
+    """Parse a judge response and return its first normalized verdict."""
+    parsed = _extract_json_object(text)
+    if not parsed:
+        return None
+    for value in parsed.values():
+        if isinstance(value, dict):
+            value = value.get('conclusion')
+        verdict = normalize_verdict(value)
+        if verdict is not None:
+            return verdict
+    return None
+
+
+def _failed_result(question, answer, model_response):
+    return {
+        'question': question,
+        'answer': answer,
+        'model_response': model_response,
+        'judge_res': {'model_response': {'conclusion': '答案解析失败'}},
+    }
 
 
 class SimpleVQA(ImageBaseDataset):
@@ -154,46 +194,37 @@ class SimpleVQA(ImageBaseDataset):
 
     def get_scores(self, result_file: str, cache_file: str, **judge_kwargs: Any):
         data = file.load(result_file)
-        model_keys = ['model_response']
         judge_kwargs = judge_kwargs.copy()
-        judge_model = judge_kwargs.get('model', 'gpt-4o')
-
-        gpt4_key = os.environ.get('OPENAI_API_KEY', None)
-        base_url = os.environ.get('OPENAI_API_BASE', None)
-        nproc = judge_kwargs.pop('nproc', 16)
+        nproc = judge_kwargs.pop('nproc', NUM_WORKERS)
 
         indices = data['index'].tolist() if 'index' in data.columns else list(range(len(data)))
+        row_by_key = {cache_key: row_idx for row_idx, cache_key in enumerate(indices)}
         cache = load_judge_cache(cache_file)
-        client = None
+        judge_model = None
 
         def process_one(row_idx, cache_key):
-            question = data['question'][row_idx]
-            answer = data['answer'][row_idx]
-            model_response = data['prediction'][row_idx]
-            line = {'question': question, 'answer': answer, 'model_response': model_response}
-            res_json = line.copy()
+            row = data.iloc[row_idx]
+            question, answer, model_response = row['question'], row['answer'], row['prediction']
             candidates = "\n[预测答案0]：{}".format(model_response)
-            prompt = COMPARE_ANSWER_PROMPT.format(question=question, answer=answer, candidates=candidates)
+            prompt = COMPARE_ANSWER_PROMPT.format(
+                question=question, answer=answer, candidates=candidates)
+            verdict = None
             try:
-                response = client.chat.completions.create(
-                    model=judge_model,
-                    messages=[{"role": "user", "content": prompt}],
-                    temperature=1
-                )
-                res = response.choices[0].message.content
-                res = res.replace("```json", "").replace("```python", "").replace("```", "").strip()
-                if res[-1] != "}":
-                    res += "}"
-                res = json.loads(res)
-            except Exception:
-                res = {"预测答案0": {"conclusion": "答案解析失败"}}
-            new_res = {}
-            for i, key in enumerate(res.keys()):
-                if i >= len(model_keys):
-                    break
-                new_res[model_keys[i]] = res[key]
-            res_json["judge_res"] = new_res
-            return cache_key, res_json
+                response = judge_model.generate(prompt, temperature=1)
+                verdict = _extract_verdict(response)
+            except Exception as err:
+                logger.warning(
+                    'SimpleVQA judge failed on index %s: %s: %s',
+                    cache_key, type(err).__name__, err)
+
+            if verdict is None:
+                return cache_key, _failed_result(question, answer, model_response)
+            return cache_key, {
+                'question': question,
+                'answer': answer,
+                'model_response': model_response,
+                'judge_res': {'model_response': {'conclusion': verdict}},
+            }
 
         pending = [
             (row_idx, cache_key)
@@ -202,35 +233,57 @@ class SimpleVQA(ImageBaseDataset):
         ]
 
         if pending:
-            client = OpenAI(
-                api_key=gpt4_key,
-                base_url=base_url
-            )
-            with ThreadPoolExecutor(max_workers=nproc) as executor:
+            # Use the same judge construction path as other benchmarks so that
+            # --judge / --judge-args / --judge-base-url / --judge-key are honoured.
+            judge_model = build_judge(**judge_kwargs)
+            with ThreadPoolExecutor(max_workers=max(nproc, 1)) as executor:
                 futures = {
                     executor.submit(process_one, row_idx, cache_key): cache_key
                     for row_idx, cache_key in pending
                 }
 
-                for future in tqdm(as_completed(futures), total=len(pending)):
-                    cache_key, res_json = future.result()
+                for done, future in enumerate(tqdm(as_completed(futures), total=len(pending)), 1):
+                    cache_key = futures[future]
+                    try:
+                        _, res_json = future.result()
+                    except Exception as err:
+                        logger.warning(
+                            'SimpleVQA judge crashed on index %s: %s: %s',
+                            cache_key, type(err).__name__, err)
+                        row = data.iloc[row_by_key[cache_key]]
+                        res_json = _failed_result(row['question'], row['answer'], row['prediction'])
                     cache[cache_key] = res_json
-                    dump_judge_cache(cache, cache_file)
+                    if done % CACHE_DUMP_INTERVAL == 0 or done == len(pending):
+                        dump_judge_cache(cache, cache_file)
+
+        # Ensure every requested index exists so scoring never raises KeyError.
+        for row_idx, cache_key in enumerate(indices):
+            if cache_key not in cache:
+                row = data.iloc[row_idx]
+                cache[cache_key] = _failed_result(row['question'], row['answer'], row['prediction'])
+
+        num_failed = sum(simplevqa_judge_failed(cache[key]) for key in indices)
+        if num_failed:
+            logger.warning(
+                'SimpleVQA: %d/%d samples could not be judged; they are counted as failed '
+                'and will be retried on the next run.', num_failed, len(indices))
 
         results = [cache[key] for key in indices]
         scores = SimpleVQAEval(results)
-        return results, pd.DataFrame(list(scores.items()))
+        return results, pd.DataFrame([scores])
 
     def evaluate(self, eval_file: str, **judge_kwargs: Any) -> pd.DataFrame:
         """
-        Evaluate model predictions on the ChartQAPro dataset.
+        Evaluate SimpleVQA model predictions with an LLM judge.
 
         Args:
             eval_file: Path to the file containing model predictions
-            **judge_kwargs: Additional arguments for the judge model
+            **judge_kwargs: Judge configuration (model/key/api_base/retry/timeout/nproc),
+                resolved by ``run.py`` from ``--judge``, ``--judge-args``,
+                ``--judge-base-url`` and ``--judge-key``.
 
         Returns:
-            DataFrame with evaluation scores by category
+            DataFrame with aggregated evaluation scores
         """
         judge_name = judge_kwargs.setdefault('model', self.DEFAULT_JUDGE_MODEL)
         tmp_file = get_judge_cache_file(eval_file, 'eval', judge_name)
