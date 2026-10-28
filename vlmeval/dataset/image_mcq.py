@@ -234,7 +234,7 @@ class ImageMCQDataset(ImageBaseDataset):
         prompt += f'Question: {question}\n'
         if len(options):
             prompt += options_prompt
-            prompt += 'Please select the correct answer from the options above. \n'
+            prompt += 'Please select the correct answer from the options above.\n'
 
         msgs = []
         if isinstance(tgt_path, list):
@@ -893,12 +893,12 @@ class MMERealWorld(ImageMCQDataset):
     SYS = {
         'MME-RealWorld': (
             'Select the best answer to the above multiple-choice question based on the image. '
-            'Respond with only the letter (A, B, C, D, or E) of the correct option. \n'
+            'Respond with only the letter (A, B, C, D, or E) of the correct option.\n'
             'The best answer is:'
         ),
         'MME-RealWorld-Lite': (
             'Select the best answer to the above multiple-choice question based on the image. '
-            'Respond with only the letter (A, B, C, D, or E) of the correct option. \n'
+            'Respond with only the letter (A, B, C, D, or E) of the correct option.\n'
             'The best answer is:'
         ),
         'MME-RealWorld-CN': (
@@ -1573,7 +1573,7 @@ class VMCBenchDataset(ImageBaseDataset):
         prompt += f'Question: {question}\n'
         if len(options):
             prompt += options_prompt
-            prompt += "Answer with the option's letter from the given choices directly. \n"
+            prompt += "Answer with the option's letter from the given choices directly.\n"
 
         msgs = []
         if isinstance(tgt_path, list):
@@ -2212,7 +2212,7 @@ class XLRSBench(ImageMCQDataset):
                 'and you need to find the options most similar to the answer. '
                 'If the meaning of all options are significantly different from the answer, output Z. '  # noqa: E501
                 f'------\nQuestion: {question}\n{options}\nAnswer: {pred}\n------\n'
-                'Please find the matched options and output uppercase character in A, B, C, ... and Z. \n'  # noqa: E501
+                'Please find the matched options and output uppercase character in A, B, C, ... and Z.\n'  # noqa: E501
                 'If the matched number is more than one, output all options like ABC, BD, etc. '
                 'Do not reply any other content.'
             )
@@ -2908,7 +2908,7 @@ class TreeBench(ImageMCQDataset):
         prompt += f'Question: {question}\n'
         if len(options):
             prompt += options_prompt
-            prompt += "Answer with the correct option's letter directly. \n"
+            prompt += "Answer with the correct option's letter directly.\n"
 
         msgs = []
         if isinstance(tgt_path, list):
